@@ -88,6 +88,12 @@ void handleRoot() {
         .button.udp:hover {
             background: #7B1FA2;
         }
+        .button.test {
+            background: #FF9800;
+        }
+        .button.test:hover {
+            background: #F57C00;
+        }
         .data {
             font-family: monospace;
             font-size: 18px;
@@ -141,6 +147,7 @@ void handleRoot() {
             <div class="button-container">
                 <button class="button reset" onclick="resetEncoder()">Resetar Encoder</button>
                 <button class="button udp" onclick="toggleUDP()">UDP: <span id="udpMode">IP ESPECÍFICO</span></button>
+                <button class="button test" onclick="testUDP()">Testar UDP</button>
             </div>
             <div id="statusMessage" class="status-message"></div>
         </div>
@@ -243,6 +250,42 @@ void handleRoot() {
                 });
         }
         
+        function testUDP() {
+            const testButton = document.querySelector('.button.test');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            testButton.disabled = true;
+            testButton.textContent = 'Testando...';
+            
+            fetch('/udp_test')
+                .then(response => response.text())
+                .then(result => {
+                    statusMessage.textContent = '✅ Teste UDP executado! Verifique o Serial Monitor';
+                    statusMessage.style.display = 'block';
+                    statusMessage.style.background = '#2d5a2d';
+                    statusMessage.style.color = '#4CAF50';
+                    
+                    setTimeout(() => {
+                        statusMessage.style.display = 'none';
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Erro ao testar UDP:', error);
+                    statusMessage.textContent = '❌ Erro ao testar UDP!';
+                    statusMessage.style.display = 'block';
+                    statusMessage.style.background = '#5a2d2d';
+                    statusMessage.style.color = '#f44336';
+                    
+                    setTimeout(() => {
+                        statusMessage.style.display = 'none';
+                    }, 3000);
+                })
+                .finally(() => {
+                    testButton.disabled = false;
+                    testButton.textContent = 'Testar UDP';
+                });
+        }
+        
         // Atualiza dados a cada 100ms (igual ao serial)
         setInterval(updateData, 100);
         
@@ -291,6 +334,19 @@ void handleUDPToggle() {
   server.send(200, "application/json", response);
 }
 
+// Função para testar UDP manualmente
+void handleUDPTest() {
+  Serial.println("=== TESTE UDP MANUAL ===");
+  Serial.print("Dispositivos conectados: "); Serial.println(WiFi.softAPgetStationNum());
+  Serial.print("IP do AP: "); Serial.println(WiFi.softAPIP());
+  Serial.print("Modo UDP: "); Serial.println(useBroadcast ? "BROADCAST" : "IP ESPECÍFICO");
+  
+  // Força envio de dados UDP
+  sendUDPData();
+  
+  server.send(200, "text/plain", "Teste UDP executado - verifique o Serial Monitor");
+}
+
 // Função para enviar dados via UDP
 void sendUDPData() {
   long pulsos = encoder.getCount();
@@ -299,27 +355,43 @@ void sendUDPData() {
   // Cria string JSON com os dados
   String jsonData = "{\"encoder\":{\"pulses\":" + String(pulsos) + ",\"distance\":" + String(distancia_cm, 2) + ",\"timestamp\":" + String(millis()) + "}}";
   
+  // Verifica se o WiFi está ativo
+  if (WiFi.softAPgetStationNum() == 0) {
+    Serial.println("AVISO: Nenhum dispositivo conectado ao AP");
+    return;
+  }
+  
   // Tenta enviar para IP específico primeiro (melhor para Windows)
   if (!useBroadcast) {
-    udp.beginPacket(udpTargetIP, udpPort);
-    udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
-    bool sent = udp.endPacket();
+    Serial.print("Tentando enviar UDP para "); Serial.print(udpTargetIP); Serial.print(":"); Serial.println(udpPort);
     
-    if (sent) {
-      Serial.print("UDP enviado para "); Serial.print(udpTargetIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+    if (udp.beginPacket(udpTargetIP, udpPort)) {
+      udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
+      bool sent = udp.endPacket();
+      
+      if (sent) {
+        Serial.print("✅ UDP enviado para "); Serial.print(udpTargetIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+      } else {
+        Serial.println("❌ ERRO: Falha ao enviar UDP para IP específico");
+      }
     } else {
-      Serial.println("ERRO: Falha ao enviar UDP para IP específico");
+      Serial.println("❌ ERRO: Falha ao iniciar pacote UDP");
     }
   } else {
     // Tenta broadcast como fallback
-    udp.beginPacket(broadcastIP, udpPort);
-    udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
-    bool sent = udp.endPacket();
+    Serial.print("Tentando enviar UDP broadcast para "); Serial.print(broadcastIP); Serial.print(":"); Serial.println(udpPort);
     
-    if (sent) {
-      Serial.print("UDP broadcast enviado para "); Serial.print(broadcastIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+    if (udp.beginPacket(broadcastIP, udpPort)) {
+      udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
+      bool sent = udp.endPacket();
+      
+      if (sent) {
+        Serial.print("✅ UDP broadcast enviado para "); Serial.print(broadcastIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+      } else {
+        Serial.println("❌ ERRO: Falha ao enviar UDP broadcast");
+      }
     } else {
-      Serial.println("ERRO: Falha ao enviar UDP broadcast");
+      Serial.println("❌ ERRO: Falha ao iniciar pacote UDP broadcast");
     }
   }
 }
@@ -345,6 +417,7 @@ void setup() {
   server.on("/data", handleData);
   server.on("/reset", handleReset);
   server.on("/udp_toggle", handleUDPToggle);
+  server.on("/udp_test", handleUDPTest);
   server.begin();
   
   Serial.println("=== SISTEMA PRONTO ===");
