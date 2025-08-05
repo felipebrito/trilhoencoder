@@ -18,7 +18,7 @@ IPAddress subnet(255, 255, 255, 0);
 WiFiUDP udp;
 const int udpPort = 8888;
 // Configurações para Windows - usar IP específico em vez de broadcast
-const char* udpTargetIP = "192.168.4.100"; // IP específico para teste
+const char* udpTargetIP = "192.168.4.2"; // IP específico para teste
 const char* broadcastIP = "192.168.4.255"; // Broadcast para todos os dispositivos na rede
 bool useBroadcast = false; // Flag para alternar entre broadcast e IP específico
 

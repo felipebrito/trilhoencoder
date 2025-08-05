@@ -67,7 +67,7 @@ Se o UDP não funcionar no Windows:
 2. **Verifique seu IP**: O receptor detectará automaticamente
 3. **Use o receptor Windows**: `python3 examples/udp_receiver_windows.py`
 4. **Alternar modo UDP**: Use o botão "UDP" na interface web
-   - **IP ESPECÍFICO**: Envia para 192.168.4.100 (padrão)
+   - **IP ESPECÍFICO**: Envia para 192.168.4.2 (padrão)
    - **BROADCAST**: Envia para todos os dispositivos
 5. **Configure seu IP**: Se necessário, altere `udpTargetIP` no código
 
