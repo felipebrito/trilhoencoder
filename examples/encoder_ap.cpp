@@ -17,7 +17,10 @@ IPAddress subnet(255, 255, 255, 0);
 // Configurações UDP
 WiFiUDP udp;
 const int udpPort = 8888;
+// Configurações para Windows - usar IP específico em vez de broadcast
+const char* udpTargetIP = "192.168.4.100"; // IP específico para teste
 const char* broadcastIP = "192.168.4.255"; // Broadcast para todos os dispositivos na rede
+bool useBroadcast = false; // Flag para alternar entre broadcast e IP específico
 
 // Servidor web
 WebServer server(80);
@@ -79,6 +82,12 @@ void handleRoot() {
         .button.reset:hover {
             background: #da190b;
         }
+        .button.udp {
+            background: #9C27B0;
+        }
+        .button.udp:hover {
+            background: #7B1FA2;
+        }
         .data {
             font-family: monospace;
             font-size: 18px;
@@ -131,6 +140,7 @@ void handleRoot() {
             <h3>Controles</h3>
             <div class="button-container">
                 <button class="button reset" onclick="resetEncoder()">Resetar Encoder</button>
+                <button class="button udp" onclick="toggleUDP()">UDP: <span id="udpMode">IP ESPECÍFICO</span></button>
             </div>
             <div id="statusMessage" class="status-message"></div>
         </div>
@@ -202,6 +212,37 @@ void handleRoot() {
                 });
         }
         
+        function toggleUDP() {
+            const udpButton = document.querySelector('.button.udp');
+            const udpModeSpan = document.getElementById('udpMode');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            fetch('/udp_toggle')
+                .then(response => response.json())
+                .then(data => {
+                    udpModeSpan.textContent = data.mode;
+                    statusMessage.textContent = `✅ UDP alterado para: ${data.mode} (${data.target})`;
+                    statusMessage.style.display = 'block';
+                    statusMessage.style.background = '#2d5a2d';
+                    statusMessage.style.color = '#4CAF50';
+                    
+                    setTimeout(() => {
+                        statusMessage.style.display = 'none';
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Erro ao alternar UDP:', error);
+                    statusMessage.textContent = '❌ Erro ao alternar modo UDP!';
+                    statusMessage.style.display = 'block';
+                    statusMessage.style.background = '#5a2d2d';
+                    statusMessage.style.color = '#f44336';
+                    
+                    setTimeout(() => {
+                        statusMessage.style.display = 'none';
+                    }, 3000);
+                });
+        }
+        
         // Atualiza dados a cada 100ms (igual ao serial)
         setInterval(updateData, 100);
         
@@ -238,6 +279,18 @@ void handleReset() {
   server.send(200, "text/plain", "Encoder resetado");
 }
 
+// Função para alternar modo UDP
+void handleUDPToggle() {
+  useBroadcast = !useBroadcast;
+  String mode = useBroadcast ? "BROADCAST" : "IP ESPECÍFICO";
+  String target = useBroadcast ? broadcastIP : udpTargetIP;
+  
+  Serial.print("UDP alterado para: "); Serial.print(mode); Serial.print(" - "); Serial.println(target);
+  
+  String response = "{\"mode\":\"" + mode + "\",\"target\":\"" + target + "\"}";
+  server.send(200, "application/json", response);
+}
+
 // Função para enviar dados via UDP
 void sendUDPData() {
   long pulsos = encoder.getCount();
@@ -246,13 +299,29 @@ void sendUDPData() {
   // Cria string JSON com os dados
   String jsonData = "{\"encoder\":{\"pulses\":" + String(pulsos) + ",\"distance\":" + String(distancia_cm, 2) + ",\"timestamp\":" + String(millis()) + "}}";
   
-  // Envia via UDP broadcast
-  udp.beginPacket(broadcastIP, udpPort);
-  udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
-  udp.endPacket();
-  
-  // Debug no serial
-  Serial.print("UDP enviado: "); Serial.println(jsonData);
+  // Tenta enviar para IP específico primeiro (melhor para Windows)
+  if (!useBroadcast) {
+    udp.beginPacket(udpTargetIP, udpPort);
+    udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
+    bool sent = udp.endPacket();
+    
+    if (sent) {
+      Serial.print("UDP enviado para "); Serial.print(udpTargetIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+    } else {
+      Serial.println("ERRO: Falha ao enviar UDP para IP específico");
+    }
+  } else {
+    // Tenta broadcast como fallback
+    udp.beginPacket(broadcastIP, udpPort);
+    udp.write((uint8_t*)jsonData.c_str(), jsonData.length());
+    bool sent = udp.endPacket();
+    
+    if (sent) {
+      Serial.print("UDP broadcast enviado para "); Serial.print(broadcastIP); Serial.print(":"); Serial.print(udpPort); Serial.print(" - "); Serial.println(jsonData);
+    } else {
+      Serial.println("ERRO: Falha ao enviar UDP broadcast");
+    }
+  }
 }
 
 void setup() {
@@ -275,12 +344,16 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/data", handleData);
   server.on("/reset", handleReset);
+  server.on("/udp_toggle", handleUDPToggle);
   server.begin();
   
   Serial.println("=== SISTEMA PRONTO ===");
   Serial.println("Conecte-se à rede WiFi e acesse o IP mostrado acima");
   Serial.print("UDP Broadcast: "); Serial.print(broadcastIP); Serial.print(":"); Serial.println(udpPort);
+  Serial.print("UDP IP Específico: "); Serial.print(udpTargetIP); Serial.print(":"); Serial.println(udpPort);
+  Serial.print("Modo UDP inicial: "); Serial.println(useBroadcast ? "BROADCAST" : "IP ESPECÍFICO");
   Serial.println("Dados enviados via UDP a cada 100ms");
+  Serial.println("Use o botão UDP na interface web para alternar o modo");
 }
 
 void loop() {

@@ -54,6 +54,29 @@ O sistema envia dados via UDP broadcast a cada 100ms:
 python3 examples/udp_receiver_example.py
 ```
 
+### Receptor UDP para Windows:
+```bash
+python3 examples/udp_receiver_windows.py
+```
+
+## Troubleshooting UDP - Windows
+
+Se o UDP não funcionar no Windows:
+
+1. **Conecte-se** à rede WiFi "EncoderESP32"
+2. **Verifique seu IP**: O receptor detectará automaticamente
+3. **Use o receptor Windows**: `python3 examples/udp_receiver_windows.py`
+4. **Alternar modo UDP**: Use o botão "UDP" na interface web
+   - **IP ESPECÍFICO**: Envia para 192.168.4.100 (padrão)
+   - **BROADCAST**: Envia para todos os dispositivos
+5. **Configure seu IP**: Se necessário, altere `udpTargetIP` no código
+
+### Verificações:
+- ✅ Conectividade de rede
+- ✅ Porta 8888 disponível
+- ✅ Firewall do Windows (desabilite temporariamente)
+- ✅ Antivírus (pode bloquear UDP)
+
 ## Arquivos
 
 - `examples/encoder_ap.cpp` - Código principal com interface web e UDP
